@@ -48,8 +48,14 @@ input, select { font: inherit; font-size: 1rem; color: inherit; }
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: center / cover no-repeat;
   pointer-events: none;
+}
+
+.bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 header, main, nav { position: relative; z-index: 1; }
@@ -332,7 +338,11 @@ let sim = null;
 let route = location.hash.replace(/^#/, "") || "/";
 
 function save() {
-  localStorage.setItem(KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  } catch {
+    /* 画像が大きいと端末に残らないことがある。画面には出す。 */
+  }
 }
 
 function go(path) {
@@ -385,7 +395,7 @@ function shell(body, hideNav) {
   const link = ([path, text]) =>
     `<a href="#${path}" class="${route === path ? "on" : ""}">${text}</a>`;
   const bg = state.backgroundImage
-    ? `<div class="bg" style="background-image:url(${JSON.stringify(state.backgroundImage)})"></div>`
+    ? `<div class="bg" aria-hidden="true"><img alt="" src="${state.backgroundImage}" /></div>`
     : "";
   return `${bg}
     <header><div class="bar"><h1>収入ポートフォリオ</h1><nav class="desk" aria-label="メニュー">${tabs.map(link).join("")}</nav></div></header>
@@ -540,19 +550,27 @@ function bind() {
   });
   document.getElementById("bg")?.addEventListener("change", (event) => {
     const file = event.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
+    event.target.value = "";
+    if (!file) return;
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
       const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, Math.round(img.width * scale));
       canvas.height = Math.max(1, Math.round(img.height * scale));
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(url);
-      state.backgroundImage = canvas.toDataURL("image/jpeg", 0.72);
+      state.backgroundImage = canvas.toDataURL("image/jpeg", 0.8);
       save();
       render();
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      alert("この画像は使えません。");
     };
     img.src = url;
   });
