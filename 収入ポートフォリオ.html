@@ -301,24 +301,27 @@ const totalOf = (rows) => rows.reduce((sum, row) => sum + clean(row.monthlyYen),
 const digits = (raw) =>
   raw.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0)).replace(/\D/g, "").slice(0, 9);
 
+function normalize(saved) {
+  if (!saved || !Array.isArray(saved.sources)) return null;
+  const sources = saved.sources
+    .filter((row) => row && typeof row.id === "string")
+    .map((row) => ({
+      id: row.id,
+      name: String(row.name || "").slice(0, 40),
+      category: CATEGORIES.some((c) => c[0] === row.category) ? row.category : "other",
+      monthlyYen: clean(row.monthlyYen),
+    }));
+  if (!sources.length) return null;
+  const backgroundImage =
+    typeof saved.backgroundImage === "string" && saved.backgroundImage.startsWith("data:image/jpeg")
+      ? saved.backgroundImage
+      : null;
+  return { goalMonthly: clean(saved.goalMonthly), backgroundImage, sources };
+}
+
 function load() {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) || "");
-    if (!saved || !Array.isArray(saved.sources) || saved.sources.length === 0) return structuredClone(SEED);
-    saved.goalMonthly = clean(saved.goalMonthly);
-    saved.sources = saved.sources
-      .filter((row) => row && typeof row.id === "string")
-      .map((row) => ({
-        id: row.id,
-        name: String(row.name || "").slice(0, 40),
-        category: CATEGORIES.some((c) => c[0] === row.category) ? row.category : "other",
-        monthlyYen: clean(row.monthlyYen),
-      }));
-    if (!saved.sources.length) return structuredClone(SEED);
-    if (typeof saved.backgroundImage !== "string" || !saved.backgroundImage.startsWith("data:image/jpeg")) {
-      saved.backgroundImage = null;
-    }
-    return saved;
+    return normalize(JSON.parse(localStorage.getItem(KEY) || "")) || structuredClone(SEED);
   } catch {
     return structuredClone(SEED);
   }
@@ -442,10 +445,20 @@ function settings() {
       ${state.backgroundImage ? `<button type="button" class="ghost" id="clear-bg">背景を外す</button>` : `<p class="tiny muted">画像をインポートすると、画面の背景になります。</p>`}
     </div>
     <div class="card pad gap">
-      <h2>入れる</h2>
-      <button type="button" class="ink-btn" id="install" style="margin-top:1rem">ホーム画面に追加</button>
-      <p class="tiny muted" id="install-note">iPhoneは共有ボタンから「ホーム画面に追加」。パソコンはブラウザのインストールです。</p>
+      <h2>データ</h2>
+      <button type="button" class="ink-btn" id="export" style="margin-top:1rem">書き出す</button>
+      <label class="ink-btn" style="margin-top:0.75rem">読み込む<input id="import" type="file" accept="application/json,.json" class="sr" /></label>
+      <p class="tiny muted">パソコンとスマホは別々に残る。移すときは書き出して、もう一方で読み込む。</p>
     </div>
+    ${
+      location.protocol === "file:"
+        ? ""
+        : `<div class="card pad gap">
+      <h2>ホーム画面</h2>
+      <button type="button" class="ink-btn" id="install" style="margin-top:1rem">ホーム画面に追加</button>
+      <p class="tiny muted" id="install-note">iPhoneは共有から「ホーム画面に追加」。パソコンはブラウザのインストール。</p>
+    </div>`
+    }
     <button type="button" class="ghost" id="reset" style="margin-top:4rem">サンプルに戻す</button>`);
 }
 
@@ -541,6 +554,32 @@ function bind() {
     sim = null;
     save();
     render();
+  });
+  document.getElementById("export")?.addEventListener("click", () => {
+    const blob = new Blob(
+      [JSON.stringify({ goalMonthly: state.goalMonthly, sources: state.sources, backgroundImage: state.backgroundImage }, null, 2)],
+      { type: "application/json" },
+    );
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "収入ポートフォリオ.json";
+    a.click();
+  });
+  document.getElementById("import")?.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const next = normalize(JSON.parse(await file.text()));
+      if (!next) throw new Error("empty");
+      if (!confirm("読み込んだ内容で、いまの数字を置き換えます。")) return;
+      state = next;
+      sim = null;
+      save();
+      render();
+    } catch {
+      alert("このファイルは読めません。");
+    }
   });
   document.getElementById("install")?.addEventListener("click", async () => {
     const note = document.getElementById("install-note");
