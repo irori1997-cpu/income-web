@@ -1,4 +1,5 @@
 const KEY = "income-portfolio-web-v1";
+const SIM_KEY = "income-portfolio-sim-v1";
 const CATEGORIES = [
   ["pay", "給与"],
   ["business", "事業"],
@@ -54,6 +55,39 @@ function load() {
 
 let state = load();
 let sim = null;
+
+function rowsOf(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((row) => row && typeof row.id === "string")
+    .map((row) => ({
+      id: row.id,
+      name: String(row.name || "").slice(0, 40),
+      category: CATEGORIES.some((c) => c[0] === row.category) ? row.category : "other",
+      monthlyYen: clean(row.monthlyYen),
+    }));
+}
+
+function loadSim() {
+  try {
+    const rows = rowsOf(JSON.parse(localStorage.getItem(SIM_KEY) || "null"));
+    return rows.length ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
+function setSim(rows) {
+  sim = rows;
+  try {
+    if (!rows) localStorage.removeItem(SIM_KEY);
+    else localStorage.setItem(SIM_KEY, JSON.stringify(rows));
+  } catch {
+    /* 残せないときは、開いているあいだだけ保持する。 */
+  }
+}
+
+sim = loadSim();
 let route = location.hash.replace(/^#/, "") || "/";
 
 function save() {
@@ -81,12 +115,13 @@ function pie(total, goal) {
   const inner = 2 * Math.PI * 74;
   const outer = 2 * Math.PI * 96;
   const reached = goal > 0 && total >= goal;
+  const over = goal > 0 && total > goal;
   const progress = goal > 0 ? Math.min(1, total / goal) : 0;
   const extra = goal > 0 ? Math.min(1, Math.max(0, total - goal) / goal) : 0;
   const drawn = progress * inner;
   const extraDrawn = extra * outer;
-  const caption = goal <= 0 ? "目標未設定" : reached ? "超過" : "目標まで";
-  const figure = goal <= 0 ? "—" : reached ? yen(total - goal) : yen(goal - total);
+  const caption = goal <= 0 ? "目標未設定" : over ? "超過" : reached ? "" : "目標まで";
+  const figure = goal <= 0 ? "—" : over ? yen(total - goal) : reached ? "達成" : yen(goal - total);
   const arc = (radius, length, circ, color, width) =>
     length <= 0
       ? ""
@@ -101,8 +136,9 @@ function pie(total, goal) {
         ${extra > 0 ? `<circle cx="110" cy="110" r="96" fill="none" stroke="var(--line)" stroke-width="12"/>${arc(96, extraDrawn, outer, "#8e3b34", 12)}` : ""}
       </svg>
       <div class="pie-copy">
-        <span class="tiny muted">${caption}</span>
+        ${caption ? `<span class="tiny muted">${caption}</span>` : ""}
         <span class="figure">${figure}</span>
+        ${over ? `<span class="tiny muted">円</span>` : ""}
       </div>
     </div>
   </div>`;
@@ -312,7 +348,7 @@ function bind() {
       if (!next) throw new Error("empty");
       if (!confirm("読み込んだ内容で、いまの数字を置き換えます。")) return;
       state = next;
-      sim = null;
+      setSim(null);
       save();
       render();
     } catch {
@@ -322,18 +358,18 @@ function bind() {
   document.getElementById("add")?.addEventListener("click", () => {
     const rows = (sim || state.sources).map((row) => ({ ...row }));
     rows.unshift({ id: crypto.randomUUID(), name: "", category: "other", monthlyYen: 0 });
-    sim = rows;
+    setSim(rows);
     render();
   });
   document.getElementById("apply")?.addEventListener("click", () => {
     if (!sim || !confirm("この内容で、いまの収入源を置き換えます。")) return;
     state.sources = sim;
-    sim = null;
+    setSim(null);
     save();
     render();
   });
   document.getElementById("discard")?.addEventListener("click", () => {
-    sim = null;
+    setSim(null);
     render();
   });
   document.querySelectorAll("[data-i]").forEach((card) => {
@@ -341,7 +377,7 @@ function bind() {
     const update = (patch) => {
       const rows = (sim || state.sources).map((row) => ({ ...row }));
       rows[index] = { ...rows[index], ...patch };
-      sim = rows;
+      setSim(rows);
       render();
     };
     card.querySelector("[data-name]").addEventListener("change", (event) => update({ name: event.target.value.slice(0, 40) }));
@@ -351,7 +387,7 @@ function bind() {
       const rows = (sim || state.sources).map((row) => ({ ...row }));
       if (rows.length <= 1) return;
       rows.splice(index, 1);
-      sim = rows;
+      setSim(rows);
       render();
     });
   });
