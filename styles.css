@@ -122,6 +122,25 @@ h2, h3 { margin: 0; font-size: 0.875rem; font-weight: 500; }
 
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 
+.swipe {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.swipe-del {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 5.5rem;
+  border: 0;
+  background: #8e3b34;
+  color: #fff;
+  font: inherit;
+  font-size: 0.875rem;
+}
+
 .source {
   display: flex;
   align-items: center;
@@ -129,7 +148,13 @@ h2, h3 { margin: 0; font-size: 0.875rem; font-weight: 500; }
   min-height: 4rem;
   padding: 0.75rem 1rem;
   text-decoration: none;
+  position: relative;
+  z-index: 1;
+  touch-action: pan-y;
+  transition: transform 0.18s ease;
 }
+
+.swipe.open .source { transform: translateX(-5.5rem); }
 
 .source span:first-child { min-width: 0; flex: 1; }
 

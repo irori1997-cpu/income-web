@@ -37,7 +37,6 @@ function normalize(saved) {
       category: CATEGORIES.some((c) => c[0] === row.category) ? row.category : "other",
       monthlyYen: clean(row.monthlyYen),
     }));
-  if (!sources.length) return null;
   const backgroundImage =
     typeof saved.backgroundImage === "string" && saved.backgroundImage.startsWith("data:image/jpeg")
       ? saved.backgroundImage
@@ -127,7 +126,9 @@ function dashboard() {
   const total = totalOf(state.sources);
   const items = state.sources
     .map(
-      (row) => `<li><a class="card source" href="#/sources/${row.id}">
+      (row) => `<li class="swipe">
+        <button type="button" class="swipe-del" data-del-source="${escapeAttr(row.id)}">削除</button>
+        <a class="card source" href="#/sources/${row.id}">
         <span><span class="truncate">${nameOf(row.name)}</span><span class="tiny muted">${labelOf(row.category)}</span></span>
         <span class="yen">${yen(row.monthlyYen)} <span class="tiny muted">円</span></span>
       </a></li>`,
@@ -211,7 +212,7 @@ function formPage(heading, row, id) {
         <label>月額<div class="end"><input name="yen" class="field" inputmode="numeric" value="${row.monthlyYen ? yen(row.monthlyYen) : ""}" aria-label="月額" /><span class="muted">円</span></div></label>
         <button class="ink-btn" type="submit">${id ? "保存する" : "追加する"}</button>
       </form>
-      ${id && state.sources.length > 1 ? `<button type="button" class="ghost" id="remove">削除する</button>` : ""}
+      ${id ? `<button type="button" class="ghost" id="remove">削除する</button>` : ""}
     </div>`,
     true,
   );
@@ -399,10 +400,72 @@ function bind() {
   document.getElementById("remove")?.addEventListener("click", () => {
     if (!confirm("この収入源を削除します。")) return;
     const id = decodeURIComponent(route.slice("/sources/".length));
-    if (state.sources.length <= 1) return;
     state.sources = state.sources.filter((row) => row.id !== id);
     save();
     go("/");
+  });
+  document.querySelectorAll(".swipe").forEach((row) => {
+    const card = row.querySelector(".source");
+    if (!card) return;
+    let startX = 0;
+    let startY = 0;
+    let dx = 0;
+    let tracking = false;
+    let horizontal = false;
+    const width = () => row.querySelector(".swipe-del")?.offsetWidth || 88;
+    card.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      startX = event.clientX;
+      startY = event.clientY;
+      dx = 0;
+      tracking = true;
+      horizontal = false;
+    });
+    card.addEventListener("pointermove", (event) => {
+      if (!tracking) return;
+      const mx = event.clientX - startX;
+      const my = event.clientY - startY;
+      if (!horizontal) {
+        if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+        if (Math.abs(my) > Math.abs(mx)) {
+          tracking = false;
+          return;
+        }
+        horizontal = true;
+        card.setPointerCapture?.(event.pointerId);
+        card.style.transition = "none";
+      }
+      dx = mx;
+      const base = row.classList.contains("open") ? -width() : 0;
+      card.style.transform = `translateX(${Math.min(0, Math.max(-width(), base + mx))}px)`;
+    });
+    const finish = () => {
+      if (!tracking && !horizontal) return;
+      tracking = false;
+      card.style.transition = "";
+      card.style.transform = "";
+      if (!horizontal) return;
+      card.dataset.swiped = "1";
+      setTimeout(() => delete card.dataset.swiped, 400);
+      if (dx < -36) {
+        document.querySelectorAll(".swipe.open").forEach((other) => other.classList.remove("open"));
+        row.classList.add("open");
+      } else if (dx > 36) {
+        row.classList.remove("open");
+      }
+      horizontal = false;
+      dx = 0;
+    };
+    card.addEventListener("pointerup", finish);
+    card.addEventListener("pointercancel", finish);
+  });
+  document.querySelectorAll("[data-del-source]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-del-source");
+      state.sources = state.sources.filter((row) => row.id !== id);
+      save();
+      render();
+    });
   });
 }
 
@@ -413,6 +476,17 @@ document.addEventListener(
     if (!a) return;
     const href = a.getAttribute("href") || "";
     if (!href.startsWith("#")) return;
+    if (a.dataset.swiped === "1") {
+      event.preventDefault();
+      delete a.dataset.swiped;
+      return;
+    }
+    const swipe = a.closest(".swipe");
+    if (swipe?.classList.contains("open")) {
+      event.preventDefault();
+      swipe.classList.remove("open");
+      return;
+    }
     event.preventDefault();
     go(href);
   },
