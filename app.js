@@ -62,7 +62,16 @@ function save() {
 }
 
 function go(path) {
-  location.hash = path;
+  const next = String(path || "/").replace(/^#/, "") || "/";
+  const current = location.hash.replace(/^#/, "") || "/";
+  if (current === next) {
+    render();
+    return;
+  }
+  const url = new URL(location.href);
+  url.hash = next;
+  history.pushState(null, "", url);
+  render();
 }
 
 function pie(total, goal) {
@@ -82,7 +91,6 @@ function pie(total, goal) {
       <div class="pie-copy">
         <span class="tiny muted">${caption}</span>
         <span class="figure">${figure}</span>
-        ${goal > 0 && !met ? `<span class="tiny muted">円</span>` : ""}
       </div>
     </div>
   </div>`;
@@ -386,7 +394,20 @@ function bind() {
   });
 }
 
+document.addEventListener(
+  "click",
+  (event) => {
+    const a = event.target.closest("a");
+    if (!a) return;
+    const href = a.getAttribute("href") || "";
+    if (!href.startsWith("#")) return;
+    event.preventDefault();
+    go(href);
+  },
+  true,
+);
 window.addEventListener("hashchange", render);
+window.addEventListener("popstate", render);
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
   window.deferredInstall = event;
