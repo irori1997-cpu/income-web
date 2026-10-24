@@ -1,0 +1,13 @@
+{
+  "name": "収入ポートフォリオ",
+  "short_name": "収入",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#efece6",
+  "theme_color": "#efece6",
+  "icons": [
+    { "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
