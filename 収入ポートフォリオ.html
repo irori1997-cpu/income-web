@@ -1,6 +1,5 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>収入ポートフォリオ</title><style>
-:root {
+<html lang="ja"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>収入ポートフォリオ</title><style>:root {
   --paper: #efece6;
   --card: #ffffff;
   --ink: #161616;
@@ -291,9 +290,8 @@ nav.mobile {
   nav.mobile { display: none; }
   main { padding-bottom: 3rem; }
 }
-
-</style></head><body><div id="app" class="app"></div><script>
-const KEY = "income-portfolio-web-v1";
+</style></head>
+<body><div id="app" class="app"></div><script>const KEY = "income-portfolio-web-v1";
 const CATEGORIES = [
   ["pay", "給与"],
   ["business", "事業"],
@@ -373,18 +371,27 @@ function go(path) {
 }
 
 function pie(total, goal) {
-  const over = goal > 0 && total > goal;
-  const met = goal > 0 && total === goal;
-  const pct = goal > 0 ? Math.min(100, (total / goal) * 100) : 0;
-  const circ = 2 * Math.PI * 82;
-  const drawn = (pct / 100) * circ;
-  const caption = goal <= 0 ? "目標未設定" : over ? "超過" : met ? "達成" : "目標まで";
-  const figure = goal <= 0 ? "—" : over ? yen(total - goal) : met ? "達成" : yen(goal - total);
+  const inner = 2 * Math.PI * 74;
+  const outer = 2 * Math.PI * 96;
+  const reached = goal > 0 && total >= goal;
+  const progress = goal > 0 ? Math.min(1, total / goal) : 0;
+  const extra = goal > 0 ? Math.min(1, Math.max(0, total - goal) / goal) : 0;
+  const drawn = progress * inner;
+  const extraDrawn = extra * outer;
+  const caption = goal <= 0 ? "目標未設定" : reached ? "超過" : "目標まで";
+  const figure = goal <= 0 ? "—" : reached ? yen(total - goal) : yen(goal - total);
+  const arc = (radius, length, circ, color, width) =>
+    length <= 0
+      ? ""
+      : length >= circ - 0.5
+        ? `<circle cx="110" cy="110" r="${radius}" fill="none" stroke="${color}" stroke-width="${width}"/>`
+        : `<circle cx="110" cy="110" r="${radius}" fill="none" stroke="${color}" stroke-width="${width}" stroke-dasharray="${length} ${circ}" transform="rotate(-90 110 110)"/>`;
   return `<div class="card pie" aria-live="polite">
     <div class="pie-wrap">
       <svg viewBox="0 0 220 220" aria-hidden="true">
-        <circle cx="110" cy="110" r="82" fill="none" stroke="${goal > 0 ? "var(--mark)" : "var(--line)"}" stroke-width="18"/>
-        ${drawn > 0 ? `<circle cx="110" cy="110" r="82" fill="none" stroke="var(--ink)" stroke-width="18" stroke-dasharray="${drawn} ${circ}" transform="rotate(-90 110 110)"/>` : ""}
+        <circle cx="110" cy="110" r="74" fill="none" stroke="${goal > 0 ? "var(--mark)" : "var(--line)"}" stroke-width="16"/>
+        ${arc(74, drawn, inner, "var(--ink)", 16)}
+        ${extra > 0 ? `<circle cx="110" cy="110" r="96" fill="none" stroke="var(--line)" stroke-width="12"/>${arc(96, extraDrawn, outer, "#8e3b34", 12)}` : ""}
       </svg>
       <div class="pie-copy">
         <span class="tiny muted">${caption}</span>
@@ -476,24 +483,13 @@ function settings() {
       <h2>背景画像</h2>
       ${state.backgroundImage ? `<img alt="いまの背景" src="${state.backgroundImage}" style="margin-top:.75rem;height:7rem;width:100%;object-fit:cover;border-radius:.75rem" />` : ""}
       <label class="ink-btn" style="margin-top:1rem">背景画像を変更<input id="bg" type="file" accept="image/*" class="sr" /></label>
-      ${state.backgroundImage ? `<button type="button" class="ghost" id="clear-bg">背景を外す</button>` : `<p class="tiny muted">画像をインポートすると、画面の背景になります。</p>`}
+      ${state.backgroundImage ? `<button type="button" class="ghost" id="clear-bg">背景を外す</button>` : ""}
     </div>
     <div class="card pad gap">
       <h2>データ</h2>
       <button type="button" class="ink-btn" id="export" style="margin-top:1rem">書き出す</button>
       <label class="ink-btn" style="margin-top:0.75rem">読み込む<input id="import" type="file" accept="application/json,.json" class="sr" /></label>
-      <p class="tiny muted">パソコンとスマホは別々に残る。移すときは書き出して、もう一方で読み込む。</p>
-    </div>
-    ${
-      location.protocol === "file:"
-        ? ""
-        : `<div class="card pad gap">
-      <h2>ホーム画面</h2>
-      <button type="button" class="ink-btn" id="install" style="margin-top:1rem">ホーム画面に追加</button>
-      <p class="tiny muted" id="install-note">iPhoneは共有から「ホーム画面に追加」。パソコンはブラウザのインストール。</p>
-    </div>`
-    }
-    <button type="button" class="ghost" id="reset" style="margin-top:4rem">サンプルに戻す</button>`);
+    </div>`);
 }
 
 function formPage(heading, row, id) {
@@ -590,13 +586,6 @@ function bind() {
     };
     img.src = url;
   });
-  document.getElementById("reset")?.addEventListener("click", () => {
-    if (!confirm("サンプルの収入源に戻します。いまの内容は置き換わります。")) return;
-    state = { ...structuredClone(SEED), backgroundImage: state.backgroundImage };
-    sim = null;
-    save();
-    render();
-  });
   document.getElementById("export")?.addEventListener("click", () => {
     const blob = new Blob(
       [JSON.stringify({ goalMonthly: state.goalMonthly, sources: state.sources, backgroundImage: state.backgroundImage }, null, 2)],
@@ -621,22 +610,6 @@ function bind() {
       render();
     } catch {
       alert("このファイルは読めません。");
-    }
-  });
-  document.getElementById("install")?.addEventListener("click", async () => {
-    const note = document.getElementById("install-note");
-    if (window.deferredInstall) {
-      window.deferredInstall.prompt();
-      await window.deferredInstall.userChoice;
-      window.deferredInstall = null;
-      if (note) note.textContent = "追加しました。";
-      return;
-    }
-    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
-    if (note) {
-      note.textContent = ios
-        ? "画面下の共有ボタンを押して、「ホーム画面に追加」を選んでください。"
-        : "ブラウザのメニューから「インストール」または「ホーム画面に追加」を選んでください。";
     }
   });
   document.getElementById("add")?.addEventListener("click", () => {
@@ -797,5 +770,4 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
 render();
-
 </script></body></html>
